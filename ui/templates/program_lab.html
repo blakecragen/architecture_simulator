@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Lab &mdash; Translation Bench</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/program_lab.css">
+</head>
+<body>
+    <div class="lab">
+        <header class="lab-header">
+            <div class="lab-header__brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <h1>Program Lab</h1>
+                <span class="brand-sub">translation bench</span>
+            </div>
+            <div class="lab-header__actions">
+                <select id="example-select" class="lab-select" title="Load a Core-C sample program">
+                    <option value="">Examples&hellip;</option>
+                </select>
+                <button id="btn-compile" class="btn btn--primary">Compile</button>
+                <button id="btn-race" class="btn btn--race" title="Compile for every ISA and run to completion on every execution model">Compile &amp; Race</button>
+                <span id="compile-status" class="compile-status" role="status"></span>
+                <a class="lab-header__link" href="/" title="Back to the hardware-first block-diagram simulator">RTL Simulator &rarr;</a>
+            </div>
+        </header>
+
+        <!-- Target machine: which ISA / model / predictor the Core-C compiles
+             to. The Run button + scrubber that DRIVE the timeline stay down in
+             the footer instrument strip; these four selectors only choose the
+             target, so they live up top where they're seen first. -->
+        <section class="target-bar" aria-label="Target machine">
+            <span class="eyebrow eyebrow--machine target-bar__eyebrow">Compiling to</span>
+            <label class="mctl">ISA
+                <select id="isa-select" class="lab-select">
+                    <option value="riscv">RISC-V</option>
+                    <option value="arm">ARM</option>
+                    <option value="x86">x86</option>
+                </select>
+            </label>
+            <label class="mctl">Model
+                <select id="model-select" class="lab-select">
+                    <option value="single_cycle">Single Cycle</option>
+                    <option value="multicycle">FetDecExe</option>
+                    <option value="pipeline">Pipeline</option>
+                    <option value="ooo">Out-of-Order</option>
+                    <option value="superscalar">Superscalar</option>
+                </select>
+            </label>
+            <label class="mctl">Predictor
+                <select id="bp-select" class="lab-select">
+                    <option value="">None</option>
+                </select>
+            </label>
+            <label class="mctl" id="lanes-ctl" hidden>Lanes
+                <select id="lanes-select" class="lab-select">
+                    <option>1</option><option selected>2</option><option>3</option>
+                    <option>4</option><option>5</option><option>6</option>
+                </select>
+            </label>
+        </section>
+
+        <main class="bench">
+            <!-- Core-C source pane -->
+            <section class="pane pane--c" aria-label="Core-C source">
+                <div class="pane__head">
+                    <span class="pane__title">main.c</span>
+                    <span class="pane__tag">Core-C</span>
+                    <span id="c-edited" class="pane__edited" hidden>edited &mdash; recompile</span>
+                </div>
+                <div class="editor" id="c-editor">
+                    <div class="editor__backdrop" id="c-backdrop" aria-hidden="true"></div>
+                    <textarea id="c-input" wrap="off" spellcheck="false"
+                              aria-label="Core-C source editor"></textarea>
+                </div>
+            </section>
+
+            <!-- Source-map ribbons -->
+            <div class="ribbons" aria-hidden="true">
+                <svg id="ribbon-svg"></svg>
+            </div>
+
+            <!-- Generated assembly / compiler stages pane -->
+            <section class="pane pane--asm" aria-label="Generated assembly">
+                <div class="pane__head">
+                    <div class="stage-tabs" role="tablist">
+                        <button class="stage-tab stage-tab--active" data-stage="asm" role="tab">Assembly</button>
+                        <button class="stage-tab" data-stage="tokens" role="tab">Tokens</button>
+                        <button class="stage-tab" data-stage="ast" role="tab">AST</button>
+                    </div>
+                    <span id="asm-target" class="pane__tag pane__tag--target">&mdash;</span>
+                </div>
+                <div class="pane__body" id="stage-body">
+                    <div class="stage-empty">Compile to see the translation.</div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Proving ground: cycles-to-completion race grid -->
+        <section class="race" id="race-panel" hidden aria-label="Cycle comparison">
+            <div class="race__head">
+                <span class="eyebrow">Proving ground</span>
+                <span class="race__sub">cycles to completion &mdash; same program, every machine</span>
+                <button id="btn-race-close" class="btn btn--ghost" title="Close">&times;</button>
+            </div>
+            <div class="race__body" id="race-body"></div>
+        </section>
+
+        <!-- Machine bar + instrument strip -->
+        <footer class="machine">
+            <div class="machine__row machine__row--controls">
+                <span class="eyebrow eyebrow--machine">Timeline</span>
+                <button id="btn-run" class="btn btn--primary">&#9656; Run</button>
+                <span id="run-status" class="run-status" role="status"></span>
+                <span class="machine__spacer"></span>
+                <button id="btn-open-sim" class="btn btn--ghost" title="Open this program and machine in the full block-diagram simulator">Open in Simulator &#8599;</button>
+            </div>
+            <div class="machine__row machine__row--instrument">
+                <div class="mini-cpu" id="mini-cpu">
+                    <span class="mini-cpu__idle">no run yet</span>
+                </div>
+                <div class="scrub">
+                    <button id="btn-prev" class="btn btn--sm" disabled>&#8249;</button>
+                    <input id="cycle-slider" type="range" min="0" max="0" value="0" disabled
+                           aria-label="Cycle scrubber">
+                    <button id="btn-next" class="btn btn--sm" disabled>&#8250;</button>
+                    <button id="btn-play" class="btn btn--sm" disabled>&#9654;</button>
+                    <span id="cycle-label" class="scrub__label">cycle &ndash;</span>
+                </div>
+                <div class="reg-ticker" id="reg-ticker"></div>
+            </div>
+
+            <!-- Source-level stepping: step into/over/out by C line, using
+                 Run's already-computed cycle trace. Click a gutter line
+                 number in the C pane to set a breakpoint (Play stops there). -->
+            <div class="machine__row machine__row--steps">
+                <span class="eyebrow">Debugger</span>
+                <div class="step-btns">
+                    <button id="btn-step-back" class="btn btn--sm" disabled title="Step back one C line">&#8617; Back</button>
+                    <button id="btn-step-into" class="btn btn--sm" disabled title="Step into the next C line (enters calls)">&#8595; Into</button>
+                    <button id="btn-step-over" class="btn btn--sm" disabled title="Step over the next C line (runs calls to completion)">&#8594; Over</button>
+                    <button id="btn-step-out" class="btn btn--sm" disabled title="Run until the current function returns to its caller">&#8593; Out</button>
+                </div>
+                <span id="debug-status" class="debug-status"></span>
+                <span class="debug-note">click a line number in main.c to set/clear a breakpoint</span>
+            </div>
+
+            <!-- Debugger row: main's variables + the print() console -->
+            <div class="machine__row machine__row--debug">
+                <div class="debug-pane debug-pane--vars">
+                    <div class="debug-pane__head">
+                        <span class="eyebrow">Variables</span>
+                        <span id="vars-note" class="debug-note">compile to populate</span>
+                    </div>
+                    <div class="debug-pane__body">
+                        <table class="vars-table">
+                            <thead><tr><th>var</th><th>value</th><th>address</th><th>location</th></tr></thead>
+                            <tbody id="vars-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="debug-pane debug-pane--term">
+                    <div class="debug-pane__head">
+                        <span class="eyebrow">Console</span>
+                        <span class="debug-note">print(expr) output, replayed to the scrubbed cycle</span>
+                    </div>
+                    <div class="debug-pane__body terminal" id="terminal">
+                        <div class="terminal__empty">no output &mdash; call print(expr) in your Core-C</div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Architecture preview: the current machine's datapath -->
+        <section class="arch" aria-label="Architecture preview">
+            <div class="arch__head">
+                <span class="eyebrow">Architecture</span>
+                <span id="arch-title" class="arch__sub">&mdash;</span>
+                <span class="debug-note">follows the cycle scrubber &mdash; hover a block for its state</span>
+            </div>
+            <div class="arch__body">
+                <svg id="arch-svg"></svg>
+            </div>
+        </section>
+
+        <!-- Custom-column cost editor: the per-instruction-class cycle
+             budgets that drive the configurable model's "Custom" race column.
+             Opened by clicking the Custom &#9998; header; a workbench dial panel. -->
+        <div class="rk-modal" id="rk-modal" hidden>
+            <div class="rk-modal__backdrop" id="rk-backdrop"></div>
+            <div class="rk-modal__panel" role="dialog" aria-modal="true"
+                 aria-labelledby="rk-modal-title">
+                <div class="rk-modal__head">
+                    <div class="rk-modal__heading">
+                        <span class="eyebrow">Custom column</span>
+                        <h2 id="rk-modal-title">Cycle-cost dials</h2>
+                    </div>
+                    <button id="rk-modal-close" class="btn btn--ghost rk-modal__x"
+                            title="Close (Esc)">&times;</button>
+                </div>
+                <p class="rk-modal__lede">
+                    These per-instruction-class cycle budgets drive the
+                    <b>Custom&nbsp;&#9998;</b> column of the race grid &mdash; the
+                    <b>configurable</b> model runs the single-cycle datapath but
+                    holds each op for its budget. Lower a class to see the payoff
+                    of making it cheaper. Edits re-race live.
+                </p>
+
+                <div class="rk-knobs">
+                    <label class="rk-knob" data-class="alu">
+                        <span class="rk-knob__name">alu</span>
+                        <input type="number" id="cost-alu" min="1" max="64" value="1">
+                        <span class="rk-knob__unit">cyc</span>
+                    </label>
+                    <label class="rk-knob" data-class="load">
+                        <span class="rk-knob__name">load</span>
+                        <input type="number" id="cost-load" min="1" max="64" value="2">
+                        <span class="rk-knob__unit">cyc</span>
+                    </label>
+                    <label class="rk-knob" data-class="store">
+                        <span class="rk-knob__name">store</span>
+                        <input type="number" id="cost-store" min="1" max="64" value="1">
+                        <span class="rk-knob__unit">cyc</span>
+                    </label>
+                    <label class="rk-knob" data-class="branch">
+                        <span class="rk-knob__name">branch</span>
+                        <input type="number" id="cost-branch" min="1" max="64" value="1">
+                        <span class="rk-knob__unit">cyc</span>
+                    </label>
+                </div>
+
+                <!-- Future work: a finer cost model. Rendered but DISABLED —
+                     the /compare contract stays {alu,load,store,branch}. The
+                     data-class / data-tier hooks + the disabled inputs make
+                     wiring these up later a one-line change in readCosts(). -->
+                <div class="rk-adv" aria-hidden="true">
+                    <div class="rk-adv__head">
+                        <span class="rk-adv__badge">Experimental</span>
+                        <span class="rk-adv__title">Tiered memory latency</span>
+                        <span class="rk-adv__note">not yet modeled &mdash; coming soon</span>
+                    </div>
+                    <div class="rk-adv__grid">
+                        <div class="rk-adv__row" data-class="load">
+                            <span class="rk-adv__label">load</span>
+                            <label class="rk-knob rk-knob--adv" data-tier="l1">
+                                <span class="rk-knob__name">L1</span>
+                                <input type="number" min="1" max="512" value="1" disabled>
+                            </label>
+                            <label class="rk-knob rk-knob--adv" data-tier="l2">
+                                <span class="rk-knob__name">L2</span>
+                                <input type="number" min="1" max="512" value="8" disabled>
+                            </label>
+                            <label class="rk-knob rk-knob--adv" data-tier="l3">
+                                <span class="rk-knob__name">L3</span>
+                                <input type="number" min="1" max="512" value="30" disabled>
+                            </label>
+                        </div>
+                        <div class="rk-adv__row" data-class="store">
+                            <span class="rk-adv__label">store</span>
+                            <label class="rk-knob rk-knob--adv" data-tier="l1">
+                                <span class="rk-knob__name">L1</span>
+                                <input type="number" min="1" max="512" value="1" disabled>
+                            </label>
+                            <label class="rk-knob rk-knob--adv" data-tier="l2">
+                                <span class="rk-knob__name">L2</span>
+                                <input type="number" min="1" max="512" value="8" disabled>
+                            </label>
+                            <label class="rk-knob rk-knob--adv" data-tier="l3">
+                                <span class="rk-knob__name">L3</span>
+                                <input type="number" min="1" max="512" value="30" disabled>
+                            </label>
+                        </div>
+                    </div>
+                    <p class="rk-adv__foot">
+                        Room to grow: per-class miss rates, mispredict penalty,
+                        FP vs. integer ALU. Wire these into <code>readCosts()</code>
+                        when the datapath models them &mdash; the shape already
+                        carries the tier keys.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diagram engine (shared with the simulator page) -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="/static/js/layout_engine.js"></script>
+    <script src="/static/js/layouts/single_cycle.js"></script>
+    <script src="/static/js/layouts/multicycle.js"></script>
+    <script src="/static/js/layouts/pipeline.js"></script>
+    <script src="/static/js/layouts/superscalar.js"></script>
+    <script src="/static/js/layouts/ooo.js"></script>
+    <script src="/static/js/program_lab.js"></script>
+</body>
+</html>

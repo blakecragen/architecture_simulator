@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTL CPU Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/cpu_simulator.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="cpu-sim">
+        <header class="cpu-sim__header">
+            <div class="cpu-sim__brand">
+                <span class="brand-icon">&#x2699;</span>
+                <h1>RTL CPU Simulator</h1>
+            </div>
+            <div class="cpu-sim__controls">
+                <div class="cpu-sim__selector">
+                    <label for="isa-select">ISA</label>
+                    <select id="isa-select">
+                        <option value="riscv">RISC-V (RV32I)</option>
+                        <option value="arm">ARM (AArch64)</option>
+                        <option value="x86">x86 (IA-32)</option>
+                    </select>
+                </div>
+                <div class="cpu-sim__selector">
+                    <label for="model-select">Model</label>
+                    <select id="model-select">
+                        <option value="single_cycle">Single Cycle</option>
+                        <option value="multicycle">FetDecExe</option>
+                        <option value="configurable">Configurable</option>
+                        <option value="pipeline">Pipeline</option>
+                        <option value="ooo">Out-of-Order</option>
+                        <option value="superscalar">Superscalar</option>
+                    </select>
+                </div>
+                <div id="lanes-control" class="cpu-sim__selector" style="display:none">
+                    <label for="lanes-slider">Lanes</label>
+                    <input id="lanes-slider" type="range" min="1" max="6" value="2" class="lanes-range">
+                    <span id="lanes-value" class="lanes-badge">2</span>
+                </div>
+                <div class="cpu-sim__selector">
+                    <label for="bp-select">Predictor</label>
+                    <select id="bp-select">
+                        <option value="">None</option>
+                    </select>
+                </div>
+                <div id="bp-stage-control" class="cpu-sim__selector" style="display:none">
+                    <label>Stage</label>
+                    <div class="input-mode-toggle">
+                        <button class="toggle-btn toggle-btn--active" data-bp-stage="id">ID</button>
+                        <button class="toggle-btn" data-bp-stage="if">IF</button>
+                    </div>
+                </div>
+                <div id="wire-layer-control" class="cpu-sim__selector wire-layer-control" style="display:none">
+                    <label>Layers</label>
+                    <div class="input-mode-toggle wire-layer-chips">
+                        <label class="wl-chip"><input type="checkbox" data-layer="data" checked>Data</label>
+                        <label class="wl-chip"><input type="checkbox" data-layer="control" checked>Control</label>
+                        <label class="wl-chip"><input type="checkbox" data-layer="cdb" checked>CDB</label>
+                        <label class="wl-chip"><input type="checkbox" data-layer="commit" checked>Commit</label>
+                    </div>
+                </div>
+                <button id="btn-run" class="btn btn--primary">Run</button>
+                <button id="btn-cheatsheet" class="btn btn--ghost" title="Instruction Reference">?</button>
+                <a href="/lab" class="btn btn--ghost" title="Program Lab: the compiler-first Translation Bench (Core-C &rarr; assembly, cross-machine race)" style="text-decoration:none">Lab &#8599;</a>
+            </div>
+        </header>
+
+        <!-- Pipeline stage panel (visible only for pipeline/superscalar model) -->
+        <div id="pipeline-panel" class="cpu-sim__pipeline-panel" style="display:none">
+            <div class="pipeline-stages">
+                <div class="pipeline-stage" id="stage-if">IF</div>
+                <div class="pipeline-stage" id="stage-id">ID</div>
+                <div class="pipeline-stage" id="stage-ex">EX</div>
+                <div class="pipeline-stage" id="stage-mem">MEM</div>
+                <div class="pipeline-stage" id="stage-wb">WB</div>
+            </div>
+        </div>
+
+        <div class="cpu-sim__body">
+            <!-- Program input -->
+            <aside class="cpu-sim__sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <h2>Program</h2>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button id="btn-expand-editor" class="btn btn--ghost" title="Full-screen editor">&#x26F6;</button>
+                            <div class="input-mode-toggle">
+                                <button id="btn-mode-asm" class="toggle-btn toggle-btn--active">Assembly</button>
+                                <button id="btn-mode-hex" class="toggle-btn">Hex</button>
+                                <button id="btn-mode-c" class="toggle-btn">Source (C)</button>
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="program-input" rows="14" spellcheck="false"></textarea>
+                    <div id="program-listing" class="program-listing" style="display:none"></div>
+                    <!-- Core-C compiler controls (visible only in Source (C) mode) -->
+                    <div id="compiler-controls" class="compiler-controls" style="display:none">
+                        <button id="btn-compile-run" class="btn btn--primary btn--sm">Compile &amp; Run</button>
+                        <select id="c-example-select" class="compiler-example-select" title="Load a Core-C sample program into the editor">
+                            <option value="">Examples…</option>
+                        </select>
+                    </div>
+                    <div id="compiler-stages" class="compiler-stages" style="display:none">
+                        <div class="compiler-stages__tabs">
+                            <button class="cstage-tab cstage-tab--active" data-cstage="source">Source</button>
+                            <button class="cstage-tab" data-cstage="tokens">Tokens</button>
+                            <button class="cstage-tab" data-cstage="ast">AST</button>
+                            <button class="cstage-tab" data-cstage="asm">Assembly</button>
+                        </div>
+                        <div id="cstage-body" class="compiler-stages__body"></div>
+                    </div>
+                    <div class="cpu-sim__cycle-info">
+                        <label>Cycles: <input id="num-cycles" type="number" value="75" min="1" max="10000" disabled></label>
+                        <label class="auto-cycles" title="Run until the architectural state settles (registers + data memory unchanged), capped at 10,000 cycles. Untick to set an explicit cycle count (max 2,000).">
+                            <input id="auto-cycles" type="checkbox" checked> auto
+                        </label>
+                        <button id="btn-load-example" class="btn btn--sm" title="Load example program">Load Example</button>
+                        <button id="btn-compare" class="btn btn--sm" title="Run this program to completion on every execution model (and, for Core-C, every ISA) and compare cycle counts">Compare</button>
+                        <button id="btn-copy-code" class="btn--copy" title="Copy code to clipboard">Copy</button>
+                    </div>
+                </div>
+
+                <!-- Register state panel -->
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <h2>Registers</h2>
+                        <button id="btn-copy-regs" class="btn--copy" title="Copy registers to clipboard">Copy</button>
+                    </div>
+                    <div id="register-panel" class="cpu-sim__registers"></div>
+                </div>
+
+                <!-- OoO panel (visible only for ooo model) -->
+                <div id="ooo-panel" class="sidebar-section" style="display:none">
+                    <div class="sidebar-header">
+                        <h2>ROB</h2>
+                    </div>
+                    <div id="rob-table"></div>
+                    <div class="sidebar-header" style="margin-top:10px">
+                        <h2>Reservation Station</h2>
+                    </div>
+                    <div id="rs-table"></div>
+                </div>
+
+                <!-- Single-cycle explainer (shown for the Single Cycle model) -->
+                <div id="single-cycle-note" class="sidebar-section cfg-note" style="display:none">
+                    <div class="sidebar-header"><h2>Single Cycle</h2></div>
+                    <p class="cfg-note__body">
+                        One instruction every clock tick &mdash; <strong>CPI&nbsp;=&nbsp;1</strong>,
+                        the fewest cycles possible. But that one tick must do
+                        <em>everything</em> (fetch&rarr;decode&rarr;ALU&rarr;memory&rarr;write&#8209;back),
+                        so its clock is the <strong>slowest</strong> of any model.
+                        Fewest cycles &ne; fastest. Switch to
+                        <strong>Configurable</strong> to dial cycles per instruction
+                        and watch total <em>time</em>.
+                    </p>
+                </div>
+
+                <!-- Configurable cycle-budget knobs (shown for the Configurable model) -->
+                <div id="configurable-panel" class="sidebar-section" style="display:none">
+                    <div class="sidebar-header"><h2>Cycle Budget</h2></div>
+                    <p class="cfg-hint">
+                        Cycles each instruction class takes. Spreading work over more
+                        cycles shrinks the clock period &mdash; watch <em>cycles</em> vs.
+                        <em>time</em> below.
+                    </p>
+                    <div class="cfg-presets">
+                        <button type="button" class="cfg-preset" data-preset="single">Single&#8209;cycle</button>
+                        <button type="button" class="cfg-preset" data-preset="fetdecexe">FetDecExe</button>
+                    </div>
+                    <div class="cfg-knobs">
+                        <label class="cfg-knob">
+                            <span class="cfg-knob__name">ALU</span>
+                            <input type="range" min="1" max="8" value="1" data-class="alu" class="cfg-range">
+                            <span class="cfg-knob__val" data-val="alu">1</span>
+                        </label>
+                        <label class="cfg-knob">
+                            <span class="cfg-knob__name">Load</span>
+                            <input type="range" min="1" max="8" value="1" data-class="load" class="cfg-range">
+                            <span class="cfg-knob__val" data-val="load">1</span>
+                        </label>
+                        <label class="cfg-knob">
+                            <span class="cfg-knob__name">Store</span>
+                            <input type="range" min="1" max="8" value="1" data-class="store" class="cfg-range">
+                            <span class="cfg-knob__val" data-val="store">1</span>
+                        </label>
+                        <label class="cfg-knob">
+                            <span class="cfg-knob__name">Branch</span>
+                            <input type="range" min="1" max="8" value="1" data-class="branch" class="cfg-range">
+                            <span class="cfg-knob__val" data-val="branch">1</span>
+                        </label>
+                    </div>
+                    <div class="cfg-readout">
+                        <div class="cfg-metric">
+                            <span class="cfg-metric__k">Cycles</span>
+                            <span class="cfg-metric__v" id="cfg-cycles">&mdash;</span>
+                        </div>
+                        <div class="cfg-metric">
+                            <span class="cfg-metric__k">Clock period</span>
+                            <span class="cfg-metric__v" id="cfg-period">&mdash;</span>
+                        </div>
+                        <div class="cfg-metric cfg-metric--time">
+                            <span class="cfg-metric__k">Time = cycles &times; period</span>
+                            <span class="cfg-metric__v" id="cfg-time">&mdash;</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Resize handle -->
+            <div class="resize-handle" id="sidebar-resize-handle"></div>
+
+            <!-- Block diagram -->
+            <main class="cpu-sim__diagram">
+                <svg id="cpu-svg"></svg>
+            </main>
+        </div>
+
+        <!-- Memory viewer -->
+        <div id="memory-panel" class="cpu-sim__memory-panel collapsed">
+            <div class="memory-panel__header">
+                <button id="btn-mem-toggle" class="mem-toggle" title="Show/hide memory" aria-expanded="false">
+                    <span class="mem-toggle__chevron">&#9656;</span> Memory
+                </button>
+                <div class="memory-panel__tabs">
+                    <button id="btn-mem-dmem" class="mem-tab mem-tab--active">Data Memory</button>
+                    <button id="btn-mem-imem" class="mem-tab">Instr Memory</button>
+                </div>
+                <div class="memory-panel__controls">
+                    <button id="btn-mem-follow" class="mem-follow mem-follow--on" aria-pressed="true" title="Auto-center on the address written each cycle">
+                        <span class="mem-follow__dot"></span>Follow writes
+                    </button>
+                    <div class="memory-search">
+                        <label for="mem-search">Addr</label>
+                        <input id="mem-search" type="text" placeholder="0x00" spellcheck="false">
+                        <button id="btn-mem-go" class="btn btn--sm">Go</button>
+                    </div>
+                    <div class="memory-visible">
+                        <label for="mem-visible-slider">Show</label>
+                        <input id="mem-visible-slider" type="range" min="11" max="51" value="21" step="2">
+                        <span id="mem-visible-count">21</span>
+                    </div>
+                    <button id="btn-copy-mem" class="btn--copy" title="Copy memory to clipboard">Copy</button>
+                </div>
+            </div>
+            <div id="mem-inspector" class="mem-inspector" hidden></div>
+            <div id="memory-grid" class="memory-panel__grid"></div>
+        </div>
+
+        <!-- Cycle scrubber -->
+        <footer class="cpu-sim__scrubber">
+            <button id="btn-prev" class="btn btn--sm" disabled>&laquo; Prev</button>
+            <input id="cycle-slider" type="range" min="0" max="0" value="0" disabled>
+            <span id="cycle-label">Cycle 0</span>
+            <button id="btn-next" class="btn btn--sm" disabled>Next &raquo;</button>
+            <button id="btn-play" class="btn btn--sm" disabled>&#9654; Play</button>
+        </footer>
+
+        <!-- Component detail slide-out panel -->
+        <div id="comp-detail-panel" class="detail-panel">
+            <div class="detail-panel__header">
+                <h2 id="detail-panel-title">Component</h2>
+                <button id="btn-close-detail" class="btn btn--ghost">&times;</button>
+            </div>
+            <div id="detail-panel-content" class="detail-panel__body"></div>
+        </div>
+        <div id="detail-overlay" class="detail-overlay"></div>
+
+        <!-- Cheat sheet slide-out panel -->
+        <div id="cheatsheet-panel" class="cheatsheet-panel">
+            <div class="cheatsheet-panel__header">
+                <h2 id="cheatsheet-title">Instruction Reference</h2>
+                <button id="btn-close-cheatsheet" class="btn btn--ghost">&times;</button>
+            </div>
+            <div id="cheatsheet-content" class="cheatsheet-panel__body"></div>
+        </div>
+        <div id="cheatsheet-overlay" class="cheatsheet-overlay"></div>
+
+        <!-- Full-screen editor modal -->
+        <div id="fs-editor-overlay" class="fs-editor-overlay">
+            <div class="fs-editor-modal">
+                <div class="fs-editor-header">
+                    <h2>Assembly Editor</h2>
+                    <div style="display:flex;gap:8px;">
+                        <button id="btn-fs-save" class="btn btn--primary btn--sm">Save &amp; Close</button>
+                        <button id="btn-fs-cancel" class="btn btn--sm">Cancel</button>
+                    </div>
+                </div>
+                <div class="fs-editor-body">
+                    <div id="fs-line-numbers" class="fs-line-numbers"></div>
+                    <textarea id="fs-editor-textarea" spellcheck="false"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Examples modal -->
+        <div id="example-overlay" class="example-overlay">
+            <div class="example-modal">
+                <div class="example-modal__header">
+                    <h2>Example Programs</h2>
+                    <button id="btn-close-examples" class="btn btn--ghost">&times;</button>
+                </div>
+                <div id="example-modal-content" class="example-modal__body"></div>
+            </div>
+        </div>
+
+        <div id="compare-overlay" class="example-overlay">
+            <div class="example-modal example-modal--wide">
+                <div class="example-modal__header">
+                    <h2>Cycles to Completion</h2>
+                    <button id="btn-close-compare" class="btn btn--ghost">&times;</button>
+                </div>
+                <div id="compare-modal-content" class="example-modal__body compare-body"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Program Lab handoff: /lab stores a one-shot payload ("Open in
+         Simulator"). Consume it BEFORE cpu_simulator.js runs, because that
+         script reads its cpu_sim_* localStorage keys at parse time. -->
+    <script>
+    (function () {
+        try {
+            const raw = localStorage.getItem('rtl_lab_handoff');
+            if (!raw) return;
+            localStorage.removeItem('rtl_lab_handoff');
+            const h = JSON.parse(raw);
+            if (h.isa)   localStorage.setItem('cpu_sim_isa', h.isa);
+            if (h.model) localStorage.setItem('cpu_sim_model', h.model);
+            if (h.bp != null) localStorage.setItem('cpu_sim_bp', h.bp);
+            if (h.lanes) localStorage.setItem('cpu_sim_lanes', String(h.lanes));
+            if (h.asm)   window.__labHandoffAsm = h.asm;
+        } catch (e) { /* malformed payload — ignore */ }
+    })();
+    </script>
+
+    <!-- Layout modules -->
+    <script src="/static/js/layout_engine.js"></script>
+    <script src="/static/js/layouts/single_cycle.js"></script>
+    <script src="/static/js/layouts/multicycle.js"></script>
+    <script src="/static/js/layouts/pipeline.js"></script>
+    <script src="/static/js/layouts/superscalar.js"></script>
+    <script src="/static/js/layouts/ooo.js"></script>
+    <script src="/static/js/cpu_simulator.js"></script>
+    <script src="/static/js/compiler_tab.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Test / build caches
+.pytest_cache/
+.ruff_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code / agent tooling (local only)
+.claude/
+.agents/
+skills-lock.json
+
+# Knowledge-graph output (generated)
+graphify-out/
+
+# Local project notes (kept local, not published)
+CLAUDE.md
+FUTURE_DIRECTIONS.md

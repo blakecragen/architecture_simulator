@@ -1,0 +1,8 @@
+# Core simulator has zero dependencies (pure Python)
+# API server
+flask>=3.0
+flask-cors>=4.0
+# Production WSGI server (used by render.yaml / any host)
+gunicorn>=21.0
+# Legacy Amaranth-based code (sim/core/, sim/execution/)
+# amaranth>=0.5
