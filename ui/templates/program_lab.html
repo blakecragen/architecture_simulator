@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/program_lab.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/program_lab.css') }}">
 </head>
 <body>
     <div class="lab">
@@ -24,7 +24,7 @@
                 <button id="btn-compile" class="btn btn--primary">Compile</button>
                 <button id="btn-race" class="btn btn--race" title="Compile for every ISA and run to completion on every execution model">Compile &amp; Race</button>
                 <span id="compile-status" class="compile-status" role="status"></span>
-                <a class="lab-header__link" href="/" title="Back to the hardware-first block-diagram simulator">RTL Simulator &rarr;</a>
+                <a class="lab-header__link" href="{{ url_for('index') }}" title="Back to the hardware-first block-diagram simulator">RTL Simulator &rarr;</a>
             </div>
         </header>
 
@@ -287,12 +287,14 @@
 
     <!-- Diagram engine (shared with the simulator page) -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="/static/js/layout_engine.js"></script>
-    <script src="/static/js/layouts/single_cycle.js"></script>
-    <script src="/static/js/layouts/multicycle.js"></script>
-    <script src="/static/js/layouts/pipeline.js"></script>
-    <script src="/static/js/layouts/superscalar.js"></script>
-    <script src="/static/js/layouts/ooo.js"></script>
-    <script src="/static/js/program_lab.js"></script>
+    <!-- API base: '' when standalone, the mount prefix when embedded -->
+    <script>window.CPU_API_URL = "{{ request.script_root }}";</script>
+    <script src="{{ url_for('static', filename='js/layout_engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/single_cycle.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/multicycle.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/pipeline.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/superscalar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/ooo.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/program_lab.js') }}"></script>
 </body>
 </html>

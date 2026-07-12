@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/cpu_simulator.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cpu_simulator.css') }}">
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
@@ -66,7 +66,7 @@
                 </div>
                 <button id="btn-run" class="btn btn--primary">Run</button>
                 <button id="btn-cheatsheet" class="btn btn--ghost" title="Instruction Reference">?</button>
-                <a href="/lab" class="btn btn--ghost" title="Program Lab: the compiler-first Translation Bench (Core-C &rarr; assembly, cross-machine race)" style="text-decoration:none">Lab &#8599;</a>
+                <a href="{{ url_for('program_lab') }}" class="btn btn--ghost" title="Program Lab: the compiler-first Translation Bench (Core-C &rarr; assembly, cross-machine race)" style="text-decoration:none">Lab &#8599;</a>
             </div>
         </header>
 
@@ -338,14 +338,17 @@
     })();
     </script>
 
+    <!-- API base: '' when standalone, the mount prefix (e.g. /projects/architecture_simulator) when embedded -->
+    <script>window.CPU_API_URL = "{{ request.script_root }}";</script>
+
     <!-- Layout modules -->
-    <script src="/static/js/layout_engine.js"></script>
-    <script src="/static/js/layouts/single_cycle.js"></script>
-    <script src="/static/js/layouts/multicycle.js"></script>
-    <script src="/static/js/layouts/pipeline.js"></script>
-    <script src="/static/js/layouts/superscalar.js"></script>
-    <script src="/static/js/layouts/ooo.js"></script>
-    <script src="/static/js/cpu_simulator.js"></script>
-    <script src="/static/js/compiler_tab.js"></script>
+    <script src="{{ url_for('static', filename='js/layout_engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/single_cycle.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/multicycle.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/pipeline.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/superscalar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/layouts/ooo.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cpu_simulator.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/compiler_tab.js') }}"></script>
 </body>
 </html>

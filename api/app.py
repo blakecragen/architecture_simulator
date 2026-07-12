@@ -13,7 +13,7 @@ GET  /cheatsheet/<isa>    -> instruction cheatsheet data
 GET  /examples            -> catalog of loadable example programs
 GET  /examples/<path>     -> content of a single example file
 """
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 try:
     from flask_cors import CORS
 except ImportError:
@@ -70,7 +70,7 @@ def _coerce_int(value, default):
         return None
 
 
-app = Flask(__name__, static_folder=os.path.join(UI_DIR, "static"))
+app = Flask(__name__, static_folder=os.path.join(UI_DIR, "static"), template_folder=os.path.join(UI_DIR, "templates"))
 if CORS:
     CORS(app)
 
@@ -152,14 +152,16 @@ def _get_x86_demo_annotations():
 
 # ── Routes ───────────────────────────────────────────────────────
 @app.route("/")
+@app.route("/rtl_cpu")
 def index():
-    return send_from_directory(os.path.join(UI_DIR, "templates"), "cpu_simulator.html")
+    return render_template("cpu_simulator.html")
 
 
 @app.route("/lab")
+@app.route("/program_lab")
 def program_lab():
     """Program Lab — the compiler-first Translation Bench page."""
-    return send_from_directory(os.path.join(UI_DIR, "templates"), "program_lab.html")
+    return render_template("program_lab.html")
 
 
 @app.route("/presets")

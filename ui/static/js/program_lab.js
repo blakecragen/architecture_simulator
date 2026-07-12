@@ -1454,7 +1454,7 @@ int main() {
         };
         try { localStorage.setItem('rtl_lab_handoff', JSON.stringify(payload)); }
         catch (_) { /* storage full/blocked — still navigate */ }
-        window.location.href = '/';
+        window.location.href = (window.CPU_API_URL || '') + '/';
     });
 
     async function loadPredictors() {
